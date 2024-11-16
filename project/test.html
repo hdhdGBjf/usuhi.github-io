@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+    <title>Симуляция чата с мошенником</title>
+    <style>
+        body {
+            font-family: 'Open Sans', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #2f3136; /* Dark background like Discord */
+        }
+        .chat-container {
+            width: 400px;
+            max-height: 600px;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            background-color: #36393f; /* Dark gray container */
+            display: flex;
+            flex-direction: column;
+        }
+        .chat-header {
+            background-color: #7289da; /* Discord Blue */
+            color: white;
+            padding: 10px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .chat-box {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            background-color: #2f3136; /* Dark background */
+        }
+        .chat-box::-webkit-scrollbar {
+            width: 6px;
+        }
+        .chat-box::-webkit-scrollbar-track {
+            background: #202225; /* Dark scrollbar track */
+        }
+        .chat-box::-webkit-scrollbar-thumb {
+            background-color: #7289da; /* Discord Blue scrollbar */
+            border-radius: 2px;
+        }
+        .message {
+            margin: 8px 0;
+            max-width: 80%;
+            padding: 8px 12px;
+            border-radius: 10px;
+            line-height: 1.5;
+            position: relative;
+            display: inline-block;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeIn 0.5s forwards;
+        }
+
+        @keyframes fadeIn {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .bot-message {
+            background-color: #7289da; /* Discord Blue for bot */
+            color: #ffffff;
+            font-size: 16px;
+            align-self: flex-start;
+        }
+        .user-message {
+            background-color: #43b581; /* Discord Green for user */
+            color: #ffffff;
+            align-self: flex-end;
+            text-align: right;
+        }
+        .options {
+            display: flex;
+            flex-direction: column;
+            margin-top: 10px;
+        }
+        .option {
+            background-color: #3ba55c; /* Discord Green for options */
+            color: white;
+            padding: 8px;
+            border-radius: 5px;
+            margin: 4px 0;
+            cursor: pointer;
+            text-align: center;
+            transition: background-color 0.3s;
+        }
+        .option:hover {
+            background-color: #2e8b46; /* Darker green on hover */
+        }
+        .feedback-message {
+            background-color: #7c6c1b; /* Yellow feedback */
+            color: #333;
+            max-width: 70%;
+            margin: 10px auto;
+            text-align: center;
+            padding: 10px;
+            border-radius: 10px;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+
+<div class="chat-container">
+    <div class="chat-header">900</div>
+    <div id="chat" class="chat-box"></div>
+    <div id="options" class="options"></div>
+</div>
+
+<script>
+    const chat = document.getElementById("chat");
+    const options = document.getElementById("options");
+
+    let step = 0;
+
+    const messages = [
+        {
+            text: "Здравствуйте! Это Служба безопасности банка. На вашем счете замечены подозрительные действия. Чтобы избежать блокировки, переведите деньги на безопасный счет. Пожалуйста, подтвердите вашу личность, указав последние четыре цифры карты.",
+            options: [
+                { text: "Я сам свяжусь с банком", correct: true, nextStep: 1 },
+                { text: "Какая сумма перевода?", correct: false, nextStep: 1 },
+                { text: "С какой карты списание?", correct: false, nextStep: 1 }
+            ],
+            responseIfCorrect: "Правильно! Никогда не предоставляйте личные данные в сообщениях.",
+            responseIfIncorrect: "Неправильный выбор! Никогда не сообщайте свои данные."
+        },
+        {
+            text: "Чтобы подтвердить, что это именно вы, пожалуйста, пришлите трехзначный код с обратной стороны карты.",
+            options: [
+                { text: "Я не предоставляю такие данные по сообщениям", correct: true, nextStep: 2 },
+                { text: "Вот мой код", correct: false, nextStep: 2 },
+                { text: "Мне нужно позвонить в банк для проверки", correct: true, nextStep: 2 }
+            ],
+            responseIfCorrect: "Хороший выбор! Никогда не делитесь кодом CVC.",
+            responseIfIncorrect: "Неправильный ответ! Код CVC нельзя предоставлять."
+        },
+        {
+            text: "Спасибо за ваш ответ. Ваша безопасность под угрозой, и требуется перевести средства на наш счет. Переведите сумму на номер ХХХХХХХХ.",
+            options: [
+                { text: "Позвоню в банк для уточнения", correct: true, nextStep: -1 },
+                { text: "Сколько нужно перевести?", correct: false, nextStep: -1 }
+            ],
+            responseIfCorrect: "Отлично! Правильный шаг — связаться с банком.",
+            responseIfIncorrect: "Опасный выбор. Вы бы перевели деньги мошеннику!"
+        }
+    ];
+
+    function showMessage(message, isBot, isFeedback = false) {
+        const messageElement = document.createElement("div");
+        messageElement.classList.add("message");
+        messageElement.classList.add(isBot ? "bot-message" : "user-message");
+        if (isFeedback) {
+            messageElement.classList.add("feedback-message");
+        }
+        messageElement.textContent = message;
+        chat.appendChild(messageElement);
+        chat.scrollTop = chat.scrollHeight;
+    }
+
+    function handleOptionClick(option, step) {
+        showMessage(option.text, false);
+        
+        if (option.correct) {
+            showMessage(messages[step].responseIfCorrect, true, true);
+        } else {
+            showMessage(messages[step].responseIfIncorrect, true, true);
+        }
+
+        if (option.nextStep === -1) {
+            setTimeout(() => alert("Диалог завершен! Ваши действия помогли сохранить конфиденциальные данные."), 1000);
+            options.innerHTML = "";
+            setTimeout(() => {
+            window.location.href = "index.html"; // Переход на новую страницу
+            }, 2000);
+        } else {
+            setTimeout(() => startChat(option.nextStep), 1000);
+        }
+    }
+
+    function showOptions(step) {
+        options.innerHTML = "";
+        messages[step].options.forEach(option => {
+            const optionElement = document.createElement("div");
+            optionElement.classList.add("option");
+            optionElement.textContent = option.text;
+            optionElement.onclick = () => handleOptionClick(option, step);
+            options.appendChild(optionElement);
+        });
+    }
+
+    function startChat(step) {
+        showMessage(messages[step].text, true);
+        showOptions(step);
+    }
+
+    startChat(step);
+</script>
+
+</body>
+</html>
